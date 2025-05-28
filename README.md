@@ -7,17 +7,16 @@ RailsDiscordNotifier is a lightweight gem that captures unhandled exceptions in 
 ## Features
 
 - Middleware-based interception of all uncaught exceptions
-- Rich embed messages with exception class, message, backtrace, request method \& URL, and timestamp
-- Configurable bot username and avatar
-- Safe error handling: failures in notification do not interrupt your app
-- Simple install and setup via Rails initializer or direct middleware inclusion
+- Rich embed messages with exception class, message, backtrace, request method & URL, and timestamp
+- Configurable via environment variables and initializer
+- Safe error handling: notification failures are logged but don’t interrupt your app
 
 ## Installation
 
 Add the gem directly from RubyGems.org by including it in your Gemfile:
 
 ```ruby
-gem "rails_discord_notifier", "~> #{RailsDiscordNotifier::VERSION}"
+gem "rails_discord_notifier", "~> 0.1.0"
 ```
 
 Then install:
@@ -26,7 +25,7 @@ Then install:
 bundle install
 ```
 
-Alternatively, you can add it with Bundler:
+Or use Bundler:
 
 ```bash
 bundle add rails_discord_notifier
@@ -40,27 +39,32 @@ Generate the default initializer in your Rails app:
 rails generate rails_discord_notifier:install
 ```
 
-Fill in your Discord incoming webhook URL and optional settings in `config/initializers/rails_discord_notifier.rb`:
+In `config/initializers/rails_discord_notifier.rb`, configure your webhook and options:
 
 ```ruby
 RailsDiscordNotifier.configure do |config|
+  # Discord webhook URL (required)
   config.webhook_url = ENV.fetch("DISCORD_WEBHOOK_URL")
+
+  # Bot username (optional, defaults to ENV["ERROR_BOT_NAME"] or "Error Bot")
   config.username    = ENV.fetch("ERROR_BOT_NAME", "Error Bot")
-  # config.avatar_url = "https://example.com/avatar.png"
+
+  # Bot avatar URL (optional)
+  # config.avatar_url = ENV.fetch("ERROR_BOT_AVATAR_URL", nil)
 end
 ```
 
-Ensure middleware is loaded (it’s added automatically by the Railtie).
+Ensure the middleware is loaded (added automatically by the Railtie).
 
-Any unhandled exception in your controllers or middleware stack will now post an embed to Discord before re-raising.
+Any uncaught exception in your controllers or middleware stack will now send an embed to Discord before re-raising.
 
 ## Configuration Options
 
-| Option       | Type   | Default        | Description                             |
-|--------------|--------|----------------|-----------------------------------------|
-| `webhook_url`| String | **Required**   | Discord incoming webhook URL            |
-| `username`   | String | `"Error Bot"` | Bot display name                        |
-| `avatar_url` | String | `nil`          | URL of the bot avatar image             |
+| Option        | Type   | Default                              | Description                        |
+|---------------|--------|--------------------------------------|------------------------------------|
+| `webhook_url` | String | **Required**                         | Discord incoming webhook URL       |
+| `username`    | String | fetched from ENV `ERROR_BOT_NAME` (defaults to `"Error Bot"`) | Bot display name                   |
+| `avatar_url`  | String | fetched from ENV `ERROR_BOT_AVATAR_URL` (defaults to `nil`)  | URL of the bot avatar image        |
 
 ## Development
 
@@ -72,7 +76,7 @@ Any unhandled exception in your controllers or middleware stack will now post an
    gem build rails_discord_notifier.gemspec
    gem install ./rails_discord_notifier-#{RailsDiscordNotifier::VERSION}.gem
    ```
-5. To release (public gems) update `version.rb` and run:
+5. To release (public gem) update `lib/rails_discord_notifier/version.rb` and run:
    ```bash
    bundle exec rake release
    ```
