@@ -37,7 +37,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Runtime dependencies
-  spec.add_dependency "rails", "~> 6.0"
+  spec.add_dependency "rails", ">= 6.0"
 
   # Development dependencies
   spec.add_development_dependency "rspec", "~> 3.0"
