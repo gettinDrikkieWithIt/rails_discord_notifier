@@ -23,13 +23,14 @@ Gem::Specification.new do |spec|
   spec.metadata["homepage_uri"]    = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["changelog_uri"]   = "#{spec.homepage}/blob/main/CHANGELOG.md"
+  spec.metadata["rubygems_mfa_required"] = "true"
 
   gemspec_file = File.basename(__FILE__)
   spec.files   = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
-    ls.read.split("\x0").reject { |f|
+    ls.read.split("\x0").reject do |f|
       f == gemspec_file ||
         f.start_with?(*%w[bin/ test/ spec/ features/ .git .github appveyor Gemfile])
-    }
+    end
   end
 
   spec.bindir      = "exe"
@@ -38,9 +39,4 @@ Gem::Specification.new do |spec|
 
   # Runtime dependencies
   spec.add_dependency "rails", ">= 6.0"
-
-  # Development dependencies
-  spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "rubocop", "~> 1.69"
-  spec.add_development_dependency "rubocop-rails", "~> 2.27"
 end

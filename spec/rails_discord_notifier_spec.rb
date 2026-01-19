@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # spec/rails_discord_notifier_spec.rb
 require "spec_helper"
 
@@ -20,9 +22,9 @@ RSpec.describe RailsDiscordNotifier do
     end
 
     it "raises if webhook_url is not set" do
-      expect {
-        RailsDiscordNotifier.configure { |c| }
-      }.to raise_error(ArgumentError, /webhook_url is required/)
+      expect do
+        RailsDiscordNotifier.configure { |_c| nil }
+      end.to raise_error(ArgumentError, /webhook_url is required/)
     end
   end
 end

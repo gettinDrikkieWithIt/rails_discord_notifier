@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # spec/spec_helper.rb
 require "bundler/setup"
 require "rails_discord_notifier"
@@ -6,7 +8,7 @@ require "logger"
 # Minimal Rails stub so middleware can call Rails.logger
 module Rails
   def self.logger
-    @logger ||= Logger.new(StringIO.new)  # or STDOUT if you prefer
+    @logger ||= Logger.new(StringIO.new)
   end
 end
 
