@@ -12,7 +12,7 @@ module RailsDiscordNotifier
 
     def call(env)
       @app.call(env)
-    rescue Exception => e
+    rescue StandardError => e
       notify_discord(e, env)
       raise
     end
@@ -28,44 +28,60 @@ module RailsDiscordNotifier
       req = Net::HTTP::Post.new(uri.request_uri, "Content-Type" => "application/json")
       req.body = JSON.generate(payload)
       http.request(req)
-    rescue => send_error
-      Rails.logger.error "RailsDiscordNotifier failed: #{send_error.class}: #{send_error.message}"
+    rescue StandardError => e
+      Rails.logger.error "RailsDiscordNotifier failed: #{e.class}: #{e.message}"
     end
 
     def build_payload(exception, env)
       request = Rack::Request.new(env)
+      params = env["action_dispatch.request.parameters"] || {}
       {
-        username:    RailsDiscordNotifier.username,
-        avatar_url:  RailsDiscordNotifier.avatar_url,
+        username: RailsDiscordNotifier.username,
+        avatar_url: RailsDiscordNotifier.avatar_url,
         embeds: [
-                       {
-                         title:       "Exception in #{env['REQUEST_METHOD']} #{env['PATH_INFO']}",
-                         description: "**#{exception.class}**: #{exception.message}",
-                         color:       16711680, # red
-                         fields: [
-                                   { name: "URL",          value: request.url, inline: false },
-                                   { name: "Controller",   value: env['action_dispatch.request.parameters']['controller'], inline: true },
-                                   { name: "Action",       value: env['action_dispatch.request.parameters']['action'],     inline: true },
-                                   { name: "Params",       value: format_params(request.params),                              inline: false },
-                                   { name: "Backtrace",    value: format_backtrace(exception.backtrace),                   inline: false },
-                                   { name: "User Agent",   value: request.user_agent.to_s,                                 inline: false },
-                                   { name: "Timestamp",    value: Time.now.utc.iso8601,                                   inline: false }
-                                 ]
-                       }
-                     ]
+          {
+            title: "Exception in #{env["REQUEST_METHOD"]} #{env["PATH_INFO"]}",
+            description: "**#{exception.class}**: #{exception.message}",
+            color: 16_711_680, # red
+            fields: [
+              { name: "URL", value: request.url, inline: false },
+              { name: "Controller",   value: params["controller"] || "N/A", inline: true },
+              { name: "Action",       value: params["action"] || "N/A",     inline: true },
+              { name: "Params",
+                value: format_params(request.params), inline: false },
+              { name: "Backtrace",
+                value: format_backtrace(exception.backtrace),                   inline: false },
+              { name: "User Agent",
+                value: request.user_agent.to_s,                                 inline: false },
+              { name: "Timestamp",
+                value: Time.now.utc.iso8601, inline: false }
+            ]
+          }
+        ]
       }
     end
 
     def format_backtrace(bt)
+      return "No backtrace available" if bt.nil? || bt.empty?
+
       bt.first(5).map { |line| "`#{line}`" }.join("\n")
     end
 
     def format_params(params)
-      filtered = params.reject { |k, _| %w(controller action format).include?(k) }
+      filtered = params.except("controller", "action", "format")
+      filtered = filter_sensitive_params(filtered)
       return "None" if filtered.empty?
+
       "```json\n#{JSON.pretty_generate(filtered)}\n```"
-    rescue
+    rescue StandardError
       "Could not parse params"
+    end
+
+    def filter_sensitive_params(params)
+      sensitive_keys = %w[password password_confirmation token api_key secret access_token refresh_token]
+      params.each_with_object({}) do |(k, v), hash|
+        hash[k] = sensitive_keys.any? { |s| k.to_s.downcase.include?(s) } ? "[FILTERED]" : v
+      end
     end
   end
 end

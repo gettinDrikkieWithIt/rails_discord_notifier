@@ -187,6 +187,12 @@ GEM
     rubocop-ast (1.44.1)
       parser (>= 3.3.7.2)
       prism (~> 1.4)
+    rubocop-rails (2.34.3)
+      activesupport (>= 4.2.0)
+      lint_roller (~> 1.1)
+      rack (>= 1.1)
+      rubocop (>= 1.75.0, < 2.0)
+      rubocop-ast (>= 1.44.0, < 2.0)
     ruby-progressbar (1.13.0)
     sprockets (4.2.2)
       concurrent-ruby (~> 1.0)
@@ -221,9 +227,10 @@ PLATFORMS
 
 DEPENDENCIES
   rails_discord_notifier!
-  rake (~> 13.0)
-  rspec (~> 3.0)
-  rubocop (~> 1.21)
+  rake (~> 13.2)
+  rspec (~> 3.13)
+  rubocop (~> 1.69)
+  rubocop-rails (~> 2.27)
 
 BUNDLED WITH
    2.6.2

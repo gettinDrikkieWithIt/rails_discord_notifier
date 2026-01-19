@@ -40,6 +40,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "rails", ">= 6.0"
 
   # Development dependencies
-  spec.add_development_dependency "rspec", "~> 3.0"
-  spec.add_development_dependency "rubocop", "~> 1.0"
+  spec.add_development_dependency "rspec", "~> 3.13"
+  spec.add_development_dependency "rubocop", "~> 1.69"
+  spec.add_development_dependency "rubocop-rails", "~> 2.27"
 end
