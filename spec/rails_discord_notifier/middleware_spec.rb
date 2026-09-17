@@ -1,17 +1,53 @@
 # frozen_string_literal: true
 
-require "rails_discord_notifier/middleware"
-
 RSpec.describe RailsDiscordNotifier::Middleware do
-  let(:app) { ->(_env) { raise "boom!" } }
-  let(:middleware) { described_class.new(app) }
+  subject(:middleware) { described_class.new(app, notifier: notifier) }
 
-  before do
-    RailsDiscordNotifier.webhook_url = "https://discord.com/api/webhooks/test"
-    allow_any_instance_of(Net::HTTP).to receive(:request).and_return(true)
+  let(:notifier) { instance_spy(RailsDiscordNotifier::Notifier) }
+  let(:env)      { Rack::MockRequest.env_for("https://app.example.com/articles") }
+
+  describe "when the application succeeds" do
+    let(:app) { ->(_env) { [200, {}, ["ok"]] } }
+
+    it { expect(middleware.call(env)).to eq([200, {}, ["ok"]]) }
+    it { expect { middleware.call(env) }.not_to raise_error }
+
+    it "does not notify" do
+      middleware.call(env)
+      expect(notifier).not_to have_received(:notify)
+    end
   end
 
-  it "forwards exceptions after notifying Discord" do
-    expect { middleware.call("REQUEST_METHOD" => "GET", "PATH_INFO" => "/") }.to raise_error(RuntimeError, "boom!")
+  describe "when the application raises" do
+    let(:app) { ->(_env) { raise "boom!" } }
+
+    it { expect { middleware.call(env) }.to raise_error(RuntimeError, "boom!") }
+
+    it "notifies before re-raising" do
+      suppress_exception { middleware.call(env) }
+      expect(notifier).to have_received(:notify).with(instance_of(RuntimeError), env: env)
+    end
+  end
+
+  describe "when notification itself fails" do
+    let(:app) { ->(_env) { raise "boom!" } }
+
+    before { allow(notifier).to receive(:notify).and_raise("notifier exploded") }
+
+    it { expect { middleware.call(env) }.to raise_error(RuntimeError, "boom!") }
+  end
+
+  describe "the default notifier" do
+    subject(:middleware) { described_class.new(app) }
+
+    let(:app) { ->(_env) { [200, {}, []] } }
+
+    it { expect { middleware.call(env) }.not_to raise_error }
+  end
+
+  def suppress_exception
+    yield
+  rescue StandardError
+    nil
   end
 end

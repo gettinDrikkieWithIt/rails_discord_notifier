@@ -2,3 +2,5 @@
 # frozen_string_literal: true
 
 require "rails_discord_notifier"
+
+exit RailsDiscordNotifier::CLI.new(ARGV).run

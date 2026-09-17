@@ -11,3 +11,13 @@
 .rspec_status
 
 *.gem
+
+# IDE and OS noise
+/.idea/
+.DS_Store
+
+# Appraisal lockfiles
+gemfiles/*.gemfile.lock
+
+# Local Claude Code settings
+/.claude/settings.local.json

@@ -1,7 +1,14 @@
+plugins:
+  - rubocop-rspec
+
 AllCops:
   TargetRubyVersion: 3.1
   NewCops: enable
   SuggestExtensions: false
+  Exclude:
+    - "gemfiles/**/*"
+    - "tmp/**/*"
+    - "vendor/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
@@ -20,3 +27,38 @@ Metrics/AbcSize:
 
 Naming/MethodParameterName:
   MinNameLength: 2
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "*.gemspec"
+
+Layout/LineLength:
+  Max: 130
+
+# Describing a limit or a wiring decision is clearer as a sentence than as a
+# forced one-liner; the betterspecs one-expectation rule still applies.
+RSpec/ExampleLength:
+  Max: 6
+
+RSpec/MultipleExpectations:
+  Max: 2
+
+RSpec/NestedGroups:
+  Max: 4
+
+RSpec/MultipleMemoizedHelpers:
+  Max: 8
+
+# Payload is a single cohesive job - read an exception, emit one Discord embed
+# within Discord's limits. Splitting it would add indirection, not clarity.
+Metrics/ClassLength:
+  Max: 200
+
+RSpec/SpecFilePathFormat:
+  Exclude:
+    - "spec/integration/**/*"
+
+RSpec/DescribeClass:
+  Exclude:
+    - "spec/integration/**/*"
