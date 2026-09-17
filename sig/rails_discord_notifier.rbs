@@ -1,4 +1,73 @@
 module RailsDiscordNotifier
   VERSION: String
-  # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+
+  def self.config: () -> Configuration
+  def self.configure: () { (Configuration) -> void } -> Configuration
+  def self.reset!: () -> void
+  def self.notifier: () -> Notifier
+  def self.notify: (Exception, ?env: Hash[String, untyped]?, ?context: Hash[untyped, untyped]) -> untyped
+  def self.error_reporter: () -> untyped
+
+  class Configuration
+    attr_accessor webhook_url: String?
+    attr_accessor username: String?
+    attr_accessor avatar_url: String?
+    attr_accessor enabled: bool
+    attr_accessor async: bool
+    attr_accessor open_timeout: Numeric
+    attr_accessor read_timeout: Numeric
+    attr_accessor write_timeout: Numeric
+    attr_accessor throttle_period: Numeric
+    attr_accessor include_params: bool
+    attr_accessor ignored_exceptions: Array[String]
+    attr_accessor backtrace_lines: Integer
+    attr_accessor install_middleware: bool
+    attr_accessor install_error_subscriber: bool
+    attr_accessor release: String?
+    attr_accessor context: ^(Hash[String, untyped]?) -> Hash[untyped, untyped] | nil
+
+    attr_writer enabled: bool
+    attr_accessor environment: String
+
+    def enabled: () -> bool
+    def enabled?: () -> bool
+    def valid_webhook_url?: () -> bool
+    def ignore?: (Exception) -> bool
+    def logger: () -> untyped
+    def environment: () -> String
+    def filter_parameters: () -> Array[untyped]
+  end
+
+  class Payload
+    def initialize: (Exception, config: Configuration, ?env: Hash[String, untyped]?, ?context: Hash[untyped, untyped]) -> void
+    def to_h: () -> Hash[Symbol, untyped]
+    def size: () -> Integer
+    def fingerprint: () -> String
+  end
+
+  class Client
+    def initialize: (Configuration) -> void
+    def post: (Hash[Symbol, untyped]) -> bool
+  end
+
+  class Notifier
+    def initialize: (Configuration, ?client: Client, ?clock: ^() -> Float) -> void
+    def notify: (Exception, ?env: Hash[String, untyped]?, ?context: Hash[untyped, untyped]) -> untyped
+    def flush: (?timeout: Numeric?) -> nil
+  end
+
+  class Middleware
+    def initialize: (untyped, ?notifier: Notifier?) -> void
+    def call: (Hash[String, untyped]) -> untyped
+  end
+
+  class ErrorSubscriber
+    def initialize: (?notifier: Notifier?) -> void
+    def report: (Exception, handled: bool, severity: Symbol, ?context: Hash[untyped, untyped], ?source: String?) -> void
+  end
+
+  class CLI
+    def initialize: (Array[String], ?out: untyped, ?env: untyped) -> void
+    def run: () -> Integer
+  end
 end

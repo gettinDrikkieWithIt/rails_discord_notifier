@@ -1,19 +1,24 @@
 # frozen_string_literal: true
 
-# spec/spec_helper.rb
 require "bundler/setup"
-require "rails_discord_notifier"
 require "logger"
+require "stringio"
+require "rack"
+require "webmock/rspec"
 
-# Minimal Rails stub so middleware can call Rails.logger
-module Rails
-  def self.logger
-    @logger ||= Logger.new(StringIO.new)
-  end
-end
+require_relative "support/dummy_app"
+require_relative "support/exception_helpers"
 
 RSpec.configure do |config|
-  config.expect_with :rspec do |c|
-    c.syntax = :expect
+  config.expect_with(:rspec) { |c| c.syntax = :expect }
+  config.disable_monkey_patching!
+
+  config.before do
+    DummyApp.reset!
+    RailsDiscordNotifier.reset!
+    RailsDiscordNotifier.config.webhook_url = "https://discord.com/api/webhooks/1/token"
+    RailsDiscordNotifier.config.enabled = true
+    RailsDiscordNotifier.config.async = false
+    RailsDiscordNotifier.config.throttle_period = 0
   end
 end

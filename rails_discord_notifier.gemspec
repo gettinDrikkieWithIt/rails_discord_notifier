@@ -25,11 +25,17 @@ Gem::Specification.new do |spec|
   spec.metadata["changelog_uri"]   = "#{spec.homepage}/blob/main/CHANGELOG.md"
   spec.metadata["rubygems_mfa_required"] = "true"
 
+  # Ship the library, its signatures and the documentation - nothing else.
+  excluded_prefixes = %w[
+    bin/ test/ spec/ features/ gemfiles/ tmp/
+    .git .github .idea .claude .rspec .rubocop .DS_Store
+    Appraisals Gemfile Rakefile appveyor
+  ].freeze
+
   gemspec_file = File.basename(__FILE__)
   spec.files   = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
     ls.read.split("\x0").reject do |f|
-      f == gemspec_file ||
-        f.start_with?(*%w[bin/ test/ spec/ features/ .git .github appveyor Gemfile])
+      f == gemspec_file || f.start_with?(*excluded_prefixes)
     end
   end
 
@@ -37,6 +43,12 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  # Runtime dependencies
-  spec.add_dependency "rails", ">= 6.0"
+  # Runtime dependencies. Deliberately narrow: this gem needs the Railtie hook,
+  # ActiveSupport::ParameterFilter and a Rack/ActionDispatch request - not all of Rails.
+  spec.add_dependency "actionpack", ">= 6.1"
+  spec.add_dependency "activesupport", ">= 6.1"
+  # No longer a default gem from Ruby 4.0; the notifier requires it directly.
+  spec.add_dependency "logger", ">= 1.5"
+  spec.add_dependency "rack", ">= 2.0"
+  spec.add_dependency "railties", ">= 6.1"
 end

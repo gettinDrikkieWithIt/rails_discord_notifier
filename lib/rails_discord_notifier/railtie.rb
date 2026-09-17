@@ -1,16 +1,20 @@
 # frozen_string_literal: true
 
-require "rails"
+require "rails/railtie"
+
 module RailsDiscordNotifier
   class Railtie < Rails::Railtie
-    config.before_initialize do
-      # allow default values
-      RailsDiscordNotifier.username   ||= "Error Bot"
-      RailsDiscordNotifier.avatar_url ||= nil
+    # Both hooks run after config/initializers so that anything the host app
+    # sets in its initializer is already in place when we read it.
+
+    initializer "rails_discord_notifier.middleware", after: :load_config_initializers do |app|
+      app.middleware.use(RailsDiscordNotifier::Middleware) if RailsDiscordNotifier.config.install_middleware
     end
 
-    initializer "rails_discord_notifier.insert_middleware" do |app|
-      app.middleware.use RailsDiscordNotifier::Middleware
+    initializer "rails_discord_notifier.error_subscriber", after: :load_config_initializers do
+      if RailsDiscordNotifier.config.install_error_subscriber && RailsDiscordNotifier.error_reporter
+        RailsDiscordNotifier.error_reporter.subscribe(RailsDiscordNotifier::ErrorSubscriber.new)
+      end
     end
   end
 end

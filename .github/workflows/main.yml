@@ -1,27 +1,45 @@
-name: Ruby
+name: CI
 
 on:
   push:
-    branches:
-      - main
-
+    branches: [main]
   pull_request:
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
-    name: Ruby ${{ matrix.ruby }}
-    strategy:
-      matrix:
-        ruby:
-          - '3.4.2'
-
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - run: bundle exec rubocop
+
+  test:
+    runs-on: ubuntu-latest
+    name: Ruby ${{ matrix.ruby }} / Rails ${{ matrix.rails }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Ruby 3.1 is the floor declared in the gemspec; Rails 6.1 cannot run on
+        # Ruby 3.4 (mutex_m) and Rails 8.0 requires Ruby 3.2+.
+        include:
+          - { ruby: "3.1", rails: "6.1" }
+          - { ruby: "3.2", rails: "6.1" }
+          - { ruby: "3.1", rails: "7.0" }
+          - { ruby: "3.1", rails: "7.1" }
+          - { ruby: "3.2", rails: "7.1" }
+          - { ruby: "3.2", rails: "7.2" }
+          - { ruby: "3.3", rails: "7.2" }
+          - { ruby: "3.3", rails: "8.0" }
+          - { ruby: "3.4", rails: "8.0" }
+    env:
+      BUNDLE_GEMFILE: gemfiles/rails_${{ matrix.rails }}.gemfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - name: Run the default task
-        run: bundle exec rake
+      - run: bundle exec rspec
