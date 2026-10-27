@@ -8,11 +8,11 @@ Gem::Specification.new do |spec|
   spec.authors       = ["GettinDrikkieWithIt"]
   spec.email         = ["33983365+gettinDrikkieWithIt@users.noreply.github.com"]
 
-  spec.summary       = "Send Rails exceptions to Discord via configurable webhook"
+  spec.summary       = "Send Rails exceptions to Discord or Google Chat via configurable webhook"
   spec.description   = <<~DESC
     RailsDiscordNotifier captures unhandled exceptions in your Rails application
-    and sends detailed error reports to a Discord channel using an incoming webhook.
-    Customize the bot username, avatar, and message format via initializer.
+    and sends detailed, redacted error reports to a Discord channel or a Google
+    Chat space using an incoming webhook.
   DESC
 
   spec.homepage      = "https://github.com/gettinDrikkieWithIt/rails_discord_notifier"

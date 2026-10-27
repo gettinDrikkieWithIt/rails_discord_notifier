@@ -20,6 +20,15 @@ RSpec.describe RailsDiscordNotifier::Notifier do
     it { expect(client).to have_received(:post).with(hash_including(:embeds)) }
   end
 
+  describe "delivery to a Google Chat webhook" do
+    before do
+      config.webhook_url = "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t"
+      notifier.notify(exception, env: env)
+    end
+
+    it { expect(client).to have_received(:post).with({ text: a_string_starting_with("*Exception in GET /articles*") }) }
+  end
+
   describe "when disabled" do
     before do
       config.enabled = false
@@ -107,6 +116,63 @@ RSpec.describe RailsDiscordNotifier::Notifier do
     it "returns without waiting for the delivery thread" do
       expect(notifier.notify(exception, env: env)).to be_a(Thread)
     end
+  end
+
+  # One thread per report, unbounded, would let an error storm against a slow
+  # webhook exhaust the host's threads. Overflow is dropped and logged instead.
+  describe "an error storm while deliveries are slow" do
+    let(:limit) { described_class::MAX_IN_FLIGHT }
+    let(:gate)  { Queue.new }
+    let(:client) do
+      instance_spy(RailsDiscordNotifier::Client).tap do |spy|
+        allow(spy).to receive(:post) { gate.pop }
+      end
+    end
+    let(:results) { Array.new(limit + 2) { notifier.notify(captured_exception) } }
+
+    before do
+      config.async = true
+      allow(config.logger).to receive(:warn)
+      results
+    end
+
+    after do
+      (limit + 2).times { gate << true }
+      notifier.flush
+    end
+
+    it { expect(results.count { |result| result.is_a?(Thread) }).to eq(limit) }
+    it { expect(results.last(2)).to eq([false, false]) }
+    it { expect(config.logger).to have_received(:warn).with(/dropped/).twice }
+  end
+
+  # A report dropped at the cap was never sent, so it must not stop the next
+  # occurrence of the same error going out once there is room again.
+  describe "a report dropped at the cap" do
+    let(:limit) { described_class::MAX_IN_FLIGHT }
+    let(:gate)  { Queue.new }
+    let(:client) do
+      instance_spy(RailsDiscordNotifier::Client).tap do |spy|
+        allow(spy).to receive(:post) { gate.pop }
+      end
+    end
+
+    before do
+      config.async = true
+      config.throttle_period = 60
+      allow(config.logger).to receive(:warn)
+      limit.times { |i| notifier.notify(exception_with_backtrace(["app/filler_#{i}.rb:1"])) }
+      notifier.notify(exception_with_backtrace(["app/dropped.rb:1"]))
+      limit.times { gate << true }
+      notifier.flush
+    end
+
+    after do
+      gate << true
+      notifier.flush
+    end
+
+    it { expect(notifier.notify(exception_with_backtrace(["app/dropped.rb:1"]))).to be_a(Thread) }
   end
 
   describe "#flush" do

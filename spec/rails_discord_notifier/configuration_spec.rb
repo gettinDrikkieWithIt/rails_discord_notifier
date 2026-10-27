@@ -164,6 +164,54 @@ RSpec.describe RailsDiscordNotifier::Configuration do
 
       it { expect(config).not_to be_enabled }
     end
+
+    context "when webhook_url is a Google Chat webhook" do
+      before { config.webhook_url = "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t" }
+
+      it { expect(config).to be_enabled }
+    end
+
+    context "when webhook_url is a Google Chat webhook over http" do
+      before { config.webhook_url = "http://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t" }
+
+      it { expect(config).not_to be_enabled }
+    end
+
+    context "when webhook_url is on another googleapis.com host" do
+      before { config.webhook_url = "https://storage.googleapis.com/v1/spaces/AAA/messages?key=k&token=t" }
+
+      it { expect(config).not_to be_enabled }
+    end
+
+    context "when webhook_url is on a chat.googleapis.com lookalike" do
+      before { config.webhook_url = "https://chat.googleapis.com.evil.example/v1/spaces/AAA/messages" }
+
+      it { expect(config).not_to be_enabled }
+    end
+  end
+
+  describe "#google_chat?" do
+    context "with a Google Chat webhook" do
+      before { config.webhook_url = "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t" }
+
+      it { expect(config).to be_google_chat }
+    end
+
+    context "with an upper-case Google Chat host" do
+      before { config.webhook_url = "https://CHAT.googleapis.com/v1/spaces/AAA/messages?key=k&token=t" }
+
+      it { expect(config).to be_google_chat }
+    end
+
+    context "with a Discord webhook" do
+      before { config.webhook_url = "https://discord.com/api/webhooks/1/token" }
+
+      it { expect(config).not_to be_google_chat }
+    end
+
+    context "without a webhook" do
+      it { expect(config).not_to be_google_chat }
+    end
   end
 
   describe "#ignore?" do

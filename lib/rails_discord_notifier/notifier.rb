@@ -7,9 +7,13 @@ module RailsDiscordNotifier
   #
   # Delivery happens off the request thread by default, and repeats of the same
   # error are collapsed, so an error storm cannot slow the application down or
-  # bury the Discord channel.
+  # bury the channel.
   class Notifier
     MAX_TRACKED_FINGERPRINTS = 1_000
+
+    # Asynchronous deliveries allowed at once. Beyond this a report is dropped,
+    # so an error storm against a slow webhook cannot exhaust the host's threads.
+    MAX_IN_FLIGHT = 10
 
     # Stamped on an exception once it has been reported, so that the middleware
     # and the Rails.error subscriber cannot both announce the same failure.
@@ -37,16 +41,17 @@ module RailsDiscordNotifier
     end
 
     # Returns the delivery Thread when asynchronous, the client result when
-    # synchronous, and false when the exception was not reportable.
+    # synchronous, and false when the exception was not reportable or the report
+    # was dropped because MAX_IN_FLIGHT deliveries were already running.
     def notify(exception, env: nil, context: {})
       return false unless report?(exception)
       return false if already_reported?(exception)
 
       mark_reported(exception)
-      payload = Payload.new(exception, config: config, env: env, context: context)
+      payload = Payload.build(exception, config: config, env: env, context: context)
       return false if throttled?(payload.fingerprint)
 
-      deliver(payload.to_h)
+      deliver(payload.to_h, payload.fingerprint)
     rescue StandardError => e
       log_internal_failure(e)
       false
@@ -73,23 +78,31 @@ module RailsDiscordNotifier
       nil
     end
 
-    def deliver(body)
+    def deliver(body, fingerprint)
       return client.post(body) unless config.async
 
       register_flush_at_exit
-      track(Thread.new do
+      thread = @lock.synchronize do
+        @threads.select!(&:alive?)
+        if @threads.size >= MAX_IN_FLIGHT
+          @seen.delete(fingerprint) # never sent, so the next occurrence is not a repeat
+          next
+        end
+
+        (@threads << spawn_delivery(body)).last
+      end
+      return thread if thread
+
+      config.logger.warn("[RailsDiscordNotifier] report dropped: #{MAX_IN_FLIGHT} deliveries already in flight")
+      false
+    end
+
+    def spawn_delivery(body)
+      Thread.new do
         client.post(body)
       rescue StandardError => e
         log_internal_failure(e)
-      end)
-    end
-
-    def track(thread)
-      @lock.synchronize do
-        @threads.select!(&:alive?)
-        @threads << thread
       end
-      thread
     end
 
     def register_flush_at_exit

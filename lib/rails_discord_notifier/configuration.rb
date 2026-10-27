@@ -12,6 +12,9 @@ module RailsDiscordNotifier
     # misconfiguration or an attempt to point the notifier at a third party.
     WEBHOOK_HOSTS = %w[discord.com discordapp.com].freeze
 
+    # Google Chat incoming webhooks live on this one host, never a subdomain.
+    GOOGLE_CHAT_HOST = "chat.googleapis.com"
+
     # Noisy, client-caused exceptions that almost always mean "bad request",
     # not "bug worth waking someone for".
     DEFAULT_IGNORED_EXCEPTIONS = %w[
@@ -74,7 +77,7 @@ module RailsDiscordNotifier
       @enabled.nil? ? default_enabled? : @enabled
     end
 
-    # True only when the notifier should actually talk to Discord.
+    # True only when the notifier should actually talk to the webhook.
     def enabled?
       !!enabled && valid_webhook_url?
     end
@@ -83,7 +86,12 @@ module RailsDiscordNotifier
       uri = parsed_webhook_url
       return false if uri.nil?
 
-      uri.scheme == "https" && discord_host?(uri.host)
+      uri.scheme == "https" && (discord_host?(uri.host) || google_chat_host?(uri.host))
+    end
+
+    # Decides the message format: Google Chat, or Discord for everything else.
+    def google_chat?
+      google_chat_host?(parsed_webhook_url&.host)
     end
 
     def ignore?(exception)
@@ -121,6 +129,10 @@ module RailsDiscordNotifier
 
       host = host.downcase
       WEBHOOK_HOSTS.any? { |allowed| host == allowed || host.end_with?(".#{allowed}") }
+    end
+
+    def google_chat_host?(host)
+      host.to_s.downcase == GOOGLE_CHAT_HOST
     end
 
     def default_enabled?

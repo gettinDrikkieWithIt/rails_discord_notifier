@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Google Chat support.** Set `webhook_url` to a Google Chat incoming webhook
+  (`https://chat.googleapis.com/v1/spaces/…`) and reports are sent as a Google
+  Chat text message instead of a Discord embed. They are redacted and size-limited
+  the same way, and fit within Google Chat's 32,000 byte limit. `username` and
+  `avatar_url` don't apply to Google Chat.
+- `rails_discord_notifier test` also reads `GOOGLE_CHAT_WEBHOOK_URL`.
+
+### Security
+
+- **Chat markup in reports is defused for Google Chat.** Attacker-influenced
+  text (exception message, path, User-Agent) can no longer produce an
+  `<users/all>` mention or a `<url|text>` masked link.
+- **The CLI no longer echoes a rejected webhook URL.** The URL is a credential
+  and the output may land in CI logs.
+- **Message scrubbing can no longer stall the process.** On Ruby 3.1 the scrubber
+  regex took cubic time, so a request that put about 4 KB of text into an
+  exception message held the interpreter lock for about 13 seconds. Matching is
+  now linear on every supported Ruby.
+- **The scrubber catches more credential shapes:** `Authorization: Bearer …`
+  and `Basic …` values, JSON and `inspect`-style quoted keys
+  (`"password":"x"`, `"password" => "x"`), and passwords in URLs
+  (`redis://:pw@host`, `postgres://user:pw@host`).
+- **`Rails.error` context and `config.context` are now filtered** with the same
+  parameter filter as request params. They were previously sent verbatim.
+- **Delivery threads are capped at 10 in flight.** Before, an error storm
+  against a slow webhook started one thread per report without limit. Reports
+  beyond the cap are dropped and logged.
+
+### Fixed
+
+- **Text that isn't valid UTF-8 no longer drops the report.** A binary header
+  value (which Rack passes through) or a stray byte in an exception message made
+  JSON encoding fail. Invalid bytes are now replaced with `�`.
+
+### Changed
+
+- **Repeats are recognised by route, not path.** The throttle fingerprint uses
+  controller and action instead of the raw request path, so `/users/1`,
+  `/users/2` and `/users/1.json` hitting the same bug count as one error.
+- Delivery log lines no longer name Discord ("webhook rejected the message",
+  "rate limited by the webhook"). Update any log alerts that match the old text.
+
 ## [0.2.0] - 2026-09-17
 
 This release fixes three defects that could leak credentials or silently drop

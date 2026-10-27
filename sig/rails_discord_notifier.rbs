@@ -32,6 +32,7 @@ module RailsDiscordNotifier
     def enabled: () -> bool
     def enabled?: () -> bool
     def valid_webhook_url?: () -> bool
+    def google_chat?: () -> bool
     def ignore?: (Exception) -> bool
     def logger: () -> untyped
     def environment: () -> String
@@ -39,10 +40,14 @@ module RailsDiscordNotifier
   end
 
   class Payload
+    def self.build: (Exception, config: Configuration, ?env: Hash[String, untyped]?, ?context: Hash[untyped, untyped]) -> Payload
     def initialize: (Exception, config: Configuration, ?env: Hash[String, untyped]?, ?context: Hash[untyped, untyped]) -> void
     def to_h: () -> Hash[Symbol, untyped]
     def size: () -> Integer
     def fingerprint: () -> String
+  end
+
+  class GoogleChatPayload < Payload
   end
 
   class Client

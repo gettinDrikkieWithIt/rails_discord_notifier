@@ -165,6 +165,23 @@ RSpec.describe RailsDiscordNotifier::Payload do
     end
   end
 
+  # Rack hands header values over as binary strings, and a message can carry
+  # any bytes. Neither may make the report fail to serialize and be dropped.
+  describe "text that is not valid UTF-8" do
+    context "with a binary User-Agent" do
+      let(:env) { Rack::MockRequest.env_for("https://app.example.com/articles", "HTTP_USER_AGENT" => "Mozilla \xFF".b) }
+
+      it { expect { JSON.generate(payload) }.not_to raise_error }
+      it { expect(field_value("User Agent")).to eq("Mozilla \uFFFD") }
+    end
+
+    context "with an invalid byte in the exception message" do
+      let(:exception) { captured_exception(RuntimeError, "bad \xFF") }
+
+      it { expect(embed[:description]).to include("bad \uFFFD") }
+    end
+  end
+
   describe "backtrace handling" do
     context "when the exception has no backtrace" do
       let(:exception) { RuntimeError.new("boom") }
@@ -232,6 +249,30 @@ RSpec.describe RailsDiscordNotifier::Payload do
       it { expect { payload }.not_to raise_error }
     end
 
+    context "when config.context returns a secret" do
+      before { config.context = ->(_env) { { "api_token" => "tok_123" } } }
+
+      it { expect(field_value("api_token")).to eq("[FILTERED]") }
+    end
+
+    context "when passed context carries a secret" do
+      subject(:payload) { described_class.new(exception, env: env, config: config, context: { password: "hunter2" }).to_h }
+
+      it { expect(field_value("password")).to eq("[FILTERED]") }
+      it { expect(payload.to_s).not_to include("hunter2") }
+    end
+
+    # The Rails guides' own example filter assumes string values.
+    context "when a filter Proc raises on a context value" do
+      before do
+        config.filter_parameters = [->(key, value) { value.reverse! if key.to_s.include?("card") }]
+        config.context = ->(_env) { { "card_count" => 3 } }
+      end
+
+      it { expect(field_value("Backtrace")).not_to be_nil }
+      it { expect(field_value("card_count")).to be_nil }
+    end
+
     context "when context is passed directly" do
       subject(:payload) { described_class.new(exception, env: env, config: config, context: { "Job" => "ImportJob" }).to_h }
 
@@ -258,16 +299,30 @@ RSpec.describe RailsDiscordNotifier::Payload do
   end
 
   describe "#fingerprint" do
-    subject(:fingerprint) { described_class.new(exception, env: env, config: config).fingerprint }
+    subject(:fingerprint) { described_class.new(exception, env: route_env("/articles/1"), config: config).fingerprint }
+
+    def route_env(path, action: "show")
+      Rack::MockRequest.env_for("https://app.example.com#{path}")
+                       .merge("action_dispatch.request.parameters" => { "controller" => "articles", "action" => action })
+    end
 
     it { is_expected.to be_a(String) }
 
     it "matches for two occurrences of the same error in the same place" do
-      expect(fingerprint).to eq(described_class.new(exception, env: env, config: config).fingerprint)
+      expect(fingerprint).to eq(described_class.new(exception, env: route_env("/articles/1"), config: config).fingerprint)
+    end
+
+    it "matches for the same error on two URLs of the same route" do
+      expect(fingerprint).to eq(described_class.new(exception, env: route_env("/articles/2"), config: config).fingerprint)
+    end
+
+    it "differs for the same error on a different route" do
+      other = route_env("/articles/1", action: "edit")
+      expect(fingerprint).not_to eq(described_class.new(exception, env: other, config: config).fingerprint)
     end
 
     it "differs for a different exception class" do
-      other = described_class.new(captured_exception(ArgumentError, "boom"), env: env, config: config)
+      other = described_class.new(captured_exception(ArgumentError, "boom"), env: route_env("/articles/1"), config: config)
       expect(fingerprint).not_to eq(other.fingerprint)
     end
   end

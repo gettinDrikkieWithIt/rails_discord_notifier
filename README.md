@@ -1,6 +1,7 @@
 # RailsDiscordNotifier
 
-Send Rails exceptions to a Discord channel via an incoming webhook.
+Send Rails exceptions to a Discord channel or a Google Chat space via an
+incoming webhook.
 
 - Catches unhandled exceptions from **web requests** (Rack middleware) and from
   **background jobs, rake tasks and runners** (`Rails.error` subscriber, Rails 7.0+)
@@ -22,11 +23,24 @@ bundle install
 rails generate rails_discord_notifier:install
 ```
 
-Then set your webhook (Server Settings → Integrations → Webhooks → Copy URL):
+Then set your webhook. The gem works out which service it is from the URL.
+
+**Discord:** Server Settings → Integrations → Webhooks → Copy URL.
 
 ```bash
 export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/…/…"
 ```
+
+**Google Chat:** open the space → Apps & integrations → Webhooks → Add webhook,
+then copy the URL. Your Workspace admin must allow incoming webhooks.
+
+```bash
+export GOOGLE_CHAT_WEBHOOK_URL="https://chat.googleapis.com/v1/spaces/…/messages?key=…&token=…"
+```
+
+The generated initializer reads `DISCORD_WEBHOOK_URL`, then
+`GOOGLE_CHAT_WEBHOOK_URL`. Treat either URL as a password: anyone holding it
+can post to your channel.
 
 ## Verify it works
 
@@ -34,13 +48,15 @@ export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/…/…"
 bundle exec rails_discord_notifier test
 ```
 
-This posts a real sample report to your webhook and prints what Discord said,
-so you find out now rather than during your next incident.
+This posts a real sample report to your webhook and prints what the service
+said, so you find out now rather than during your next incident. It reads
+`DISCORD_WEBHOOK_URL`, then `GOOGLE_CHAT_WEBHOOK_URL`, or takes `--webhook URL`
+(which ends up in your shell history, so prefer the environment variable).
 
 ## What a report looks like
 
-An embed titled with the failing request, followed by the details you need to
-find the error:
+In Discord, an embed titled with the failing request, followed by the details
+you need to find the error:
 
 ```
 Exception in POST /orders
@@ -55,22 +71,26 @@ Params       { "order": { "email": "", "card_token": "[FILTERED]" } }
 Backtrace    `app/controllers/orders_controller.rb:42:in 'create'` …
 ```
 
+In Google Chat, the same details as a single text message, with the params and
+backtrace in code blocks. Chat has no per-message sender name or avatar: those
+come from the name and avatar you gave the webhook when you created it.
+
 ## Configuration
 
 Everything is optional except `webhook_url`.
 
 | Option | Default | Description |
 |---|---|---|
-| `webhook_url` | `nil` | **Required.** Must be `https://` on `discord.com` or `discordapp.com`. Anything else leaves the notifier disabled. |
+| `webhook_url` | `nil` | **Required.** Must be `https://` on `discord.com`, `discordapp.com` or `chat.googleapis.com`. Anything else leaves the notifier disabled. |
 | `enabled` | `false` in development and test, `true` elsewhere | Master switch. |
-| `username` | `"Error Bot"` | Bot display name in Discord. |
-| `avatar_url` | `nil` | Bot avatar image. |
+| `username` | `"Error Bot"` | Bot display name. Discord only. |
+| `avatar_url` | `nil` | Bot avatar image. Discord only. |
 | `async` | `true` | Deliver on a separate thread so a failing request is not slowed down. |
 | `throttle_period` | `60` | Seconds to collapse repeats of the same error. `0` disables. |
 | `ignored_exceptions` | routing/404-style noise (see below) | Exception class names, matched including subclasses. |
 | `include_params` | `true` | Include filtered request parameters. |
 | `filter_parameters` | `[]` | Extra redaction matchers, unioned with your app's `config.filter_parameters` and the gem's built-in list. |
-| `backtrace_lines` | `10` | Backtrace lines to send, trimmed to fit Discord's field limit. |
+| `backtrace_lines` | `10` | Backtrace lines to send, trimmed to fit the message size limit. |
 | `open_timeout` / `read_timeout` / `write_timeout` | `2` / `5` / `5` | Seconds. |
 | `environment` | `Rails.env`, else `RAILS_ENV`/`RACK_ENV` | Shown as a field, and decides the `enabled` default. |
 | `release` | `nil` | Shown as a field; handy for matching an error to a deploy. |
@@ -115,15 +135,36 @@ Parameters and query strings are filtered recursively with
 
 Because it is a union, enabling this gem can never redact less than your
 application already does. To send no parameters at all, set
-`config.include_params = false`.
+`config.include_params = false`. The same filter applies to extra fields from
+`config.context` and from `Rails.error` context.
 
 Exception messages are free text rather than structured parameters, so they get
-a best-effort scrub instead: `token=abc`, `password="x"` and `Api_Key: abc` style
+a best-effort scrub instead: `token=abc`, `password="x"`, `Api_Key: abc`,
+`"password":"x"`, `Authorization: Bearer abc` and `redis://:password@host` style
 fragments are replaced with `[FILTERED]`. This catches the usual culprits (a
 database connection error carrying a password, an HTTP error carrying a URL with
 a token) but cannot be exhaustive the way parameter filtering is.
 
+Path segments are sent as they are. If a route puts a secret in the path (for
+example `/password_resets/:token`), move it to the query string or the body,
+where it is filtered.
+
 Request bodies, headers and cookies are never sent.
+
+In Google Chat, text like `<users/all>` or `<https://…|click here>` would become
+an @all mention or a disguised link. Since anyone who can make your app raise
+controls part of the report (the path, the User-Agent, often the exception
+message), the gem defuses these with an invisible zero-width space after each
+`<`. The report looks the same but can't ping the space or hide a link. The
+space is still there if you copy text out of the report (for example
+``in `<main>'`` from a backtrace), so retype the `<` if a search comes up empty.
+
+## Google Chat rate limits
+
+Google Chat accepts about one message per second per space, shared with
+anything else posting there. Repeats of the same error are already collapsed
+(`throttle_period`), but a burst of *different* errors beyond that rate is
+rejected by Google with HTTP 429. Those rejections are logged, not retried.
 
 ## Reporting an exception yourself
 
@@ -143,6 +184,12 @@ end
 
 The middleware observes and re-raises, so it never changes how your application
 handles errors. When both entry points see the same exception, it is reported once.
+
+"The same error" means the same exception class, raised from the same line, on
+the same controller action. So `/orders/1` and `/orders/2` failing the same way
+count as one error for `throttle_period`. At most 10 reports are delivered at
+once; during a storm, anything beyond that is dropped with a log line rather
+than starting more threads.
 
 Asynchronous deliveries still in flight are waited for at process exit, so a
 report from a rake task or `rails runner` is not lost when the process ends. Call
