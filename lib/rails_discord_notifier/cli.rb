@@ -79,7 +79,8 @@ module RailsDiscordNotifier
       index = @argv.index("--webhook")
       return @argv[index + 1] if index && @argv[index + 1]
 
-      @env["DISCORD_WEBHOOK_URL"] || @env["GOOGLE_CHAT_WEBHOOK_URL"]
+      # Blank counts as unset: deploy templates often export unused variables as "".
+      @env.values_at("DISCORD_WEBHOOK_URL", "GOOGLE_CHAT_WEBHOOK_URL").find { |url| !url.to_s.strip.empty? }
     end
 
     # Never echoes the URL: it is a credential and this may be a CI log.

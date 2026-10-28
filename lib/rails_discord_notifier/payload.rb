@@ -123,12 +123,15 @@ module RailsDiscordNotifier
       ]
     end
 
-    # Context the filter cannot process is left out: sending it unfiltered could
-    # leak, and failing here would drop the whole report.
+    # ParameterFilter only walks into real Hashes, so ActionController::Parameters
+    # is unwrapped first. Context the filter cannot process is left out: sending
+    # it unfiltered could leak, and failing here would drop the whole report.
     def context_fields
-      extra = parameter_filter.filter(context.merge(configured_context))
-      extra.map { |name, value| { name: name.to_s, value: value.to_s, inline: true } }
-    rescue StandardError
+      extra = context.merge(configured_context)
+                     .transform_values { |value| value.respond_to?(:to_unsafe_h) ? value.to_unsafe_h : value }
+      parameter_filter.filter(extra).map { |name, value| { name: name.to_s, value: value.to_s, inline: true } }
+    rescue StandardError => e
+      config.logger.warn("[RailsDiscordNotifier] context left out, the filter raised #{e.class}: #{e.message}")
       []
     end
 
@@ -267,10 +270,8 @@ module RailsDiscordNotifier
         embed[:fields].sum { |f| f[:name].to_s.length + f[:value].to_s.length }
     end
 
-    # Also makes the string valid UTF-8: a binary header or a stray byte would
-    # otherwise fail JSON encoding and lose the report.
     def truncate(string, limit)
-      string = string.to_s.dup.force_encoding(Encoding::UTF_8).scrub
+      string = SecretScrubber.utf8(string)
       return string if string.length <= limit
       return string[0, limit].to_s if limit < ELLIPSIS.length
 

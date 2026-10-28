@@ -19,6 +19,8 @@ RSpec.describe RailsDiscordNotifier::SecretScrubber do
 
     it { expect(scrubber.scrub("Authorization: Bearer eyJhbGciOi.abc")).to eq("Authorization: [FILTERED]") }
     it { expect(scrubber.scrub("authorization=Basic dXNlcjpwYXNz")).to eq("authorization=[FILTERED]") }
+    it { expect(scrubber.scrub("Authorization: Token abc123secret")).to eq("Authorization: [FILTERED]") }
+    it { expect(scrubber.scrub("Authorization: Digest abc123secret")).to eq("Authorization: [FILTERED]") }
     it { expect(scrubber.scrub('{"password":"hunter2","id":1}')).to eq('{"password":[FILTERED],"id":1}') }
     it { expect(scrubber.scrub('{"password" => "hunter2", "id" => 1}')).to eq('{"password" => [FILTERED], "id" => 1}') }
     it { expect(scrubber.scrub('{"password"=>"hunter2"}')).to eq('{"password"=>[FILTERED]}') }
@@ -27,6 +29,7 @@ RSpec.describe RailsDiscordNotifier::SecretScrubber do
   describe "passwords inside URLs" do
     it { expect(scrubber.scrub("at redis://:s3cretpw@cache:6379")).to eq("at redis://:[FILTERED]@cache:6379") }
     it { expect(scrubber.scrub("postgres://app:Pass123@db/x")).to eq("postgres://app:[FILTERED]@db/x") }
+    it { expect(scrubber.scrub("postgres://app:p@ss@db/x")).to eq("postgres://app:[FILTERED]@db/x") }
     it { expect(scrubber.scrub("see https://example.com:8080/a@b")).to eq("see https://example.com:8080/a@b") }
     it { expect(scrubber.scrub("https://api.example.com:8443?token=s3cr@t")).to eq("https://api.example.com:8443?token=[FILTERED]") }
     it { expect(scrubber.scrub("amqp://rabbit:5672,password=p@ssw0rd")).to eq("amqp://rabbit:5672,password=[FILTERED]") }

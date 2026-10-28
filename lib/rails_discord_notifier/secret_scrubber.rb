@@ -13,8 +13,18 @@ module RailsDiscordNotifier
     # An optional closing quote on the key, then `=`, `:` or `=>`.
     SEPARATOR = %q{(["']?\s*(?:=>|[=:])\s*)}
     # A quoted string, an HTTP auth scheme with its credential, or one word.
-    VALUE = %q{(?:"[^"]*"|'[^']*'|(?:bearer|basic)\s+\S+|\S+)}
-    URL_PASSWORD = %r{(://[^:/@\s]*:)[^@/\s]+(@)}
+    VALUE = %q{(?:"[^"]*"|'[^']*'|(?:bearer|basic|token|digest|negotiate)\s+\S+|\S+)}
+    # Up to the last "@" before the host, so a raw "@" inside the password is covered too.
+    URL_PASSWORD = %r{(://[^:/@\s]*:)[^/\s]+(@)}
+
+    # Valid UTF-8, or JSON encoding fails and the report is lost. Binary (how Rack
+    # hands over headers) is read as UTF-8, other encodings are converted, and
+    # invalid bytes become U+FFFD either way.
+    def self.utf8(value)
+      string = value.to_s
+      string = string.dup.force_encoding(Encoding::UTF_8) if string.encoding == Encoding::BINARY
+      string.encode(Encoding::UTF_8, invalid: :replace, undef: :replace).scrub
+    end
 
     def initialize(matchers)
       @matchers = matchers
@@ -23,7 +33,7 @@ module RailsDiscordNotifier
     # Key patterns run first: URL_PASSWORD would otherwise read "host:8443?token=s3cr@"
     # as a username and password, and swallow the key that marks the real secret.
     def scrub(text)
-      scrubbed = patterns.reduce(text.to_s.dup.force_encoding(Encoding::UTF_8).scrub) do |result, pattern|
+      scrubbed = patterns.reduce(self.class.utf8(text)) do |result, pattern|
         result.gsub(pattern) { "#{Regexp.last_match(1)}#{Regexp.last_match(2)}[FILTERED]" }
       end
       scrubbed.gsub(URL_PASSWORD) { "#{Regexp.last_match(1)}[FILTERED]#{Regexp.last_match(2)}" }

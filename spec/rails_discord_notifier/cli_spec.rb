@@ -61,6 +61,18 @@ RSpec.describe RailsDiscordNotifier::CLI do
     it { expect(out.string).to match(/sent/i) }
   end
 
+  describe "test command with an empty DISCORD_WEBHOOK_URL and a Google Chat webhook" do
+    let(:url)     { "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t" }
+    let(:cli_env) { { "DISCORD_WEBHOOK_URL" => "", "GOOGLE_CHAT_WEBHOOK_URL" => url } }
+
+    before do
+      stub_request(:post, url).to_return(status: 200, body: "{}")
+      cli.run
+    end
+
+    it { expect(a_request(:post, url)).to have_been_made }
+  end
+
   describe "webhook given on the command line" do
     let(:argv)    { ["test", "--webhook", "https://discord.com/api/webhooks/2/other"] }
     let(:cli_env) { {} }

@@ -21,6 +21,13 @@ RSpec.describe RailsDiscordNotifier::InstallGenerator do
     it { expect(RailsDiscordNotifier.config.webhook_url).to eq(google_chat_url) }
   end
 
+  # Kamal, Docker and .env templates often export unused variables as "".
+  context "when DISCORD_WEBHOOK_URL is empty and GOOGLE_CHAT_WEBHOOK_URL is set" do
+    let(:env) { { "DISCORD_WEBHOOK_URL" => "", "GOOGLE_CHAT_WEBHOOK_URL" => google_chat_url } }
+
+    it { expect(RailsDiscordNotifier.config.webhook_url).to eq(google_chat_url) }
+  end
+
   context "when DISCORD_WEBHOOK_URL is set" do
     let(:env) { { "DISCORD_WEBHOOK_URL" => "https://discord.com/api/webhooks/1/token" } }
 

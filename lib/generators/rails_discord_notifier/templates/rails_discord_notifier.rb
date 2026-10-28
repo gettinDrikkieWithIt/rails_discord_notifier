@@ -5,7 +5,7 @@ RailsDiscordNotifier.configure do |config|
   # (https://chat.googleapis.com/v1/spaces/...) webhook URL. The message format
   # follows the URL. If it is missing or malformed the notifier stays disabled and
   # logs a warning rather than breaking boot. Keep it out of source control.
-  config.webhook_url = ENV.fetch("DISCORD_WEBHOOK_URL") { ENV.fetch("GOOGLE_CHAT_WEBHOOK_URL", nil) }
+  config.webhook_url = ENV.fetch("DISCORD_WEBHOOK_URL", nil).presence || ENV.fetch("GOOGLE_CHAT_WEBHOOK_URL", nil)
 
   # Appearance of the bot in Discord. Google Chat uses the name and avatar set on
   # the webhook itself.

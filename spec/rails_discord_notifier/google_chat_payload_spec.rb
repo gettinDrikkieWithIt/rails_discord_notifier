@@ -44,10 +44,9 @@ RSpec.describe RailsDiscordNotifier::GoogleChatPayload do
   end
 
   describe "the backtrace" do
-    it do
-      expect(text).to end_with("*Backtrace:*\n```\napp/models/order.rb:7:in `save'\n" \
-                               "app/controllers/orders_controller.rb:42\n```")
-    end
+    let(:code_block) { "```\napp/models/order.rb:7:in `save'\napp/controllers/orders_controller.rb:42\n```" }
+
+    it { expect(text).to end_with("*Backtrace:*\n#{code_block}") }
 
     context "when it is very deep" do
       let(:exception) do
