@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-28
+
 ### Added
 
 - **Google Chat support.** Set `webhook_url` to a Google Chat incoming webhook
@@ -27,12 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regex took cubic time, so a request that put about 4 KB of text into an
   exception message held the interpreter lock for about 13 seconds. Matching is
   now linear on every supported Ruby.
-- **The scrubber catches more credential shapes:** `Authorization: Bearer …`
-  and `Basic …` values, JSON and `inspect`-style quoted keys
-  (`"password":"x"`, `"password" => "x"`), and passwords in URLs
-  (`redis://:pw@host`, `postgres://user:pw@host`).
+- **The scrubber catches more credential shapes:** `Authorization` values with
+  the `Bearer`, `Basic`, `Token`, `Digest` or `Negotiate` scheme, JSON and
+  `inspect`-style quoted keys (`"password":"x"`, `"password" => "x"`), and
+  passwords in URLs (`redis://:pw@host`, `postgres://user:pw@host`).
 - **`Rails.error` context and `config.context` are now filtered** with the same
-  parameter filter as request params. They were previously sent verbatim.
+  parameter filter as request params, including nested values and
+  `ActionController::Parameters`. They were previously sent verbatim. If the
+  filter itself raises, the context is left out and a warning is logged.
 - **Delivery threads are capped at 10 in flight.** Before, an error storm
   against a slow webhook started one thread per report without limit. Reports
   beyond the cap are dropped and logged.
@@ -41,7 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Text that isn't valid UTF-8 no longer drops the report.** A binary header
   value (which Rack passes through) or a stray byte in an exception message made
-  JSON encoding fail. Invalid bytes are now replaced with `�`.
+  JSON encoding fail. Invalid bytes are now replaced with `�`, and text in other
+  encodings (e.g. Windows-1252) is converted.
 
 ### Changed
 

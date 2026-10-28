@@ -15,7 +15,7 @@ incoming webhook.
 ## Installation
 
 ```ruby
-gem "rails_discord_notifier", "~> 0.2"
+gem "rails_discord_notifier", "~> 0.3"
 ```
 
 ```bash
