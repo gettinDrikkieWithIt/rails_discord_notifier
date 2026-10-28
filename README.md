@@ -75,6 +75,12 @@ In Google Chat, the same details as a single text message, with the params and
 backtrace in code blocks. Chat has no per-message sender name or avatar: those
 come from the name and avatar you gave the webhook when you created it.
 
+The backtrace goes through `Rails.backtrace_cleaner`, as on Rails' own error
+pages, so it shows your app's frames rather than gem internals. When an error
+never reaches your code, such as a job class that doesn't exist, the library
+frames are shown with short gem paths instead. On Heroku, `Host` is the dyno
+name (`web.1`, `worker.2`) rather than the dyno's random hostname.
+
 ## Configuration
 
 Everything is optional except `webhook_url`.
@@ -90,7 +96,7 @@ Everything is optional except `webhook_url`.
 | `ignored_exceptions` | routing/404-style noise (see below) | Exception class names, matched including subclasses. |
 | `include_params` | `true` | Include filtered request parameters. |
 | `filter_parameters` | `[]` | Extra redaction matchers, unioned with your app's `config.filter_parameters` and the gem's built-in list. |
-| `backtrace_lines` | `10` | Backtrace lines to send, trimmed to fit the message size limit. |
+| `backtrace_lines` | `10` | Backtrace lines to send after cleaning, trimmed to fit the message size limit. |
 | `open_timeout` / `read_timeout` / `write_timeout` | `2` / `5` / `5` | Seconds. |
 | `environment` | `Rails.env`, else `RAILS_ENV`/`RACK_ENV` | Shown as a field, and decides the `enabled` default. |
 | `release` | `nil` | Shown as a field; handy for matching an error to a deploy. |

@@ -22,8 +22,11 @@ module RailsDiscordNotifier
 
     private
 
+    # Outside a request the title is only the class name, which the description
+    # already opens with, so it is left out rather than repeated.
     def render(embed)
-      heading = [bold(embed[:title]), embed[:description], ""]
+      heading = [embed[:description], ""]
+      heading.unshift(bold(embed[:title])) if request
       (heading + embed[:fields].map { |field| render_field(field) }).join("\n")
     end
 
@@ -42,7 +45,7 @@ module RailsDiscordNotifier
     end
 
     def formatted_backtrace
-      lines = Array(exception.backtrace).first(config.backtrace_lines)
+      lines = clean_backtrace
       return "No backtrace available" if lines.empty?
 
       fence(lines.join("\n"))
