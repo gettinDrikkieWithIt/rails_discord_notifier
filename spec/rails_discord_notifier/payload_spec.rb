@@ -8,6 +8,8 @@ RSpec.describe RailsDiscordNotifier::Payload do
   let(:env)       { Rack::MockRequest.env_for("https://app.example.com/articles") }
   let(:embed)     { payload[:embeds].first }
   let(:fields)    { embed[:fields] }
+  let(:app_frame) { "#{Rails.root}/app/jobs/import_job.rb:12:in 'ImportJob#perform'" }
+  let(:gem_frame) { "#{Gem.default_dir}/gems/sidekiq-7.3.10/lib/sidekiq/processor.rb:140:in 'Module#const_get'" }
 
   def field_value(name)
     fields.find { |f| f[:name] == name }&.fetch(:value)
@@ -189,10 +191,75 @@ RSpec.describe RailsDiscordNotifier::Payload do
   end
 
   describe "backtrace handling" do
+    # BACKTRACE=1 is Rails' switch for skipping the cleaner while debugging.
+    before { stub_const("ENV", ENV.to_h.except("BACKTRACE")) }
+
     context "when the exception has no backtrace" do
       let(:exception) { RuntimeError.new("boom") }
 
       it { expect(field_value("Backtrace")).to eq("No backtrace available") }
+    end
+
+    context "with app and library frames" do
+      let(:exception) { exception_with_backtrace([gem_frame, app_frame]) }
+
+      it { expect(field_value("Backtrace")).to eq("`app/jobs/import_job.rb:12:in 'ImportJob#perform'`") }
+    end
+
+    context "with library frames only" do
+      let(:exception) { exception_with_backtrace([gem_frame]) }
+
+      it { expect(field_value("Backtrace")).to eq("`sidekiq (7.3.10) lib/sidekiq/processor.rb:140:in 'Module#const_get'`") }
+    end
+
+    context "with more app frames than backtrace_lines" do
+      let(:exception) { exception_with_backtrace([app_frame, app_frame.sub(":12:", ":13:")]) }
+
+      before { config.backtrace_lines = 1 }
+
+      it { expect(field_value("Backtrace")).to eq("`app/jobs/import_job.rb:12:in 'ImportJob#perform'`") }
+    end
+
+    # Rails 6.1 and 7.0 build the cleaner around "#{Rails.root}/", which is "/"
+    # without an app, so it would strip the leading slash from every path.
+    context "when Rails has no app root" do
+      let(:exception) { exception_with_backtrace([gem_frame]) }
+
+      before { allow(Rails).to receive(:root).and_return(nil) }
+
+      it { expect(field_value("Backtrace")).to eq("`#{gem_frame}`") }
+    end
+
+    context "when Rails is not loaded" do
+      let(:env)       { nil }
+      let(:exception) { exception_with_backtrace([gem_frame]) }
+
+      before { hide_const("Rails") }
+
+      it { expect(field_value("Backtrace")).to eq("`#{gem_frame}`") }
+    end
+
+    # A custom silencer in the host app must not cost the whole report.
+    context "when the backtrace cleaner raises" do
+      let(:exception) { exception_with_backtrace([gem_frame]) }
+
+      before { allow(Rails.backtrace_cleaner).to receive(:clean).and_raise("cleaner blew up") }
+
+      it { expect(field_value("Backtrace")).to eq("`#{gem_frame}`") }
+    end
+  end
+
+  describe "host" do
+    context "when running on a Heroku dyno" do
+      before { stub_const("ENV", ENV.to_h.merge("DYNO" => "worker.1")) }
+
+      it { expect(field_value("Host")).to eq("worker.1") }
+    end
+
+    context "when not on Heroku" do
+      before { stub_const("ENV", ENV.to_h.except("DYNO")) }
+
+      it { expect(field_value("Host")).to eq(Socket.gethostname) }
     end
   end
 

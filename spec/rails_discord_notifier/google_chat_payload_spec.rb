@@ -21,7 +21,8 @@ RSpec.describe RailsDiscordNotifier::GoogleChatPayload do
     context "without a request" do
       let(:env) { nil }
 
-      it { expect(text).to start_with("*RuntimeError*\n") }
+      # The description already opens with the class, so a title would repeat it.
+      it { expect(text).to start_with("*RuntimeError*: boom\n\n") }
     end
 
     context "with a cause" do
@@ -46,6 +47,9 @@ RSpec.describe RailsDiscordNotifier::GoogleChatPayload do
   describe "the backtrace" do
     let(:code_block) { "```\napp/models/order.rb:7:in `save'\napp/controllers/orders_controller.rb:42\n```" }
 
+    # BACKTRACE=1 is Rails' switch for skipping the cleaner while debugging.
+    before { stub_const("ENV", ENV.to_h.except("BACKTRACE")) }
+
     it { expect(text).to end_with("*Backtrace:*\n#{code_block}") }
 
     context "when it is very deep" do
@@ -55,6 +59,15 @@ RSpec.describe RailsDiscordNotifier::GoogleChatPayload do
 
       it { expect(text).to include("file_0.rb") }
       it { expect(text).to end_with("\n```") }
+    end
+
+    context "when it runs through library code" do
+      let(:exception) do
+        exception_with_backtrace(["#{Gem.default_dir}/gems/sidekiq-7.3.10/lib/sidekiq/processor.rb:140:in 'x'",
+                                  "#{Rails.root}/app/jobs/import_job.rb:12:in 'ImportJob#perform'"])
+      end
+
+      it { expect(text).to end_with("*Backtrace:*\n```\napp/jobs/import_job.rb:12:in 'ImportJob#perform'\n```") }
     end
 
     context "when there is none" do

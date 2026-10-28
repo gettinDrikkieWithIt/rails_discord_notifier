@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-28
+
+### Changed
+
+- **Backtraces show your app's frames.** The backtrace goes through
+  `Rails.backtrace_cleaner`, so your own lines are no longer crowded out by gem
+  frames and cut off at the size limit. An error that never reaches your code
+  keeps its library frames, with short gem paths.
+- **`Host` shows the Heroku dyno name** (`web.1`, `worker.2`) instead of the
+  dyno's random hostname.
+- **Google Chat reports from outside a request no longer repeat the error
+  class** as a heading above the message.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added

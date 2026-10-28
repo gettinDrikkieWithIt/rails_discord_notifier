@@ -169,7 +169,7 @@ module RailsDiscordNotifier
     end
 
     def formatted_backtrace
-      lines = Array(exception.backtrace).first(config.backtrace_lines)
+      lines = clean_backtrace
       return "No backtrace available" if lines.empty?
 
       lines.each_with_object(+"") do |line, out|
@@ -179,6 +179,21 @@ module RailsDiscordNotifier
         out << "\n" unless out.empty?
         out << entry
       end
+    end
+
+    # The app's own frames, as on Rails' error pages, so the lines that matter
+    # fit the message. An error raised entirely inside library code keeps its
+    # library frames, with gem paths shortened. Raw frames when the cleaner is
+    # unavailable (no Rails) or raises, and without an app root: Rails 6.1 and
+    # 7.0 would then strip the leading "/" from every path.
+    def clean_backtrace
+      lines = Array(exception.backtrace)
+      return lines.first(config.backtrace_lines) unless Rails.root
+
+      app_frames = Rails.backtrace_cleaner.clean(lines)
+      (app_frames.empty? ? Rails.backtrace_cleaner.clean(lines, :all) : app_frames).first(config.backtrace_lines)
+    rescue StandardError
+      Array(exception.backtrace).first(config.backtrace_lines)
     end
 
     def filtered_url
@@ -232,8 +247,10 @@ module RailsDiscordNotifier
       @parameter_filter ||= ActiveSupport::ParameterFilter.new(config.filter_parameters)
     end
 
+    # Heroku hostnames are random IDs; DYNO ("web.1", "worker.2") names the process.
     def hostname
-      @hostname ||= Socket.gethostname
+      dyno = ENV.fetch("DYNO", "")
+      @hostname ||= dyno.empty? ? Socket.gethostname : dyno
     rescue StandardError
       nil
     end
