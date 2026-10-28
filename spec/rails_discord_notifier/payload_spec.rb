@@ -165,6 +165,29 @@ RSpec.describe RailsDiscordNotifier::Payload do
     end
   end
 
+  # Rack hands header values over as binary strings, and a message can carry
+  # any bytes. Neither may make the report fail to serialize and be dropped.
+  describe "text that is not valid UTF-8" do
+    context "with a binary User-Agent" do
+      let(:env) { Rack::MockRequest.env_for("https://app.example.com/articles", "HTTP_USER_AGENT" => "Mozilla \xFF".b) }
+
+      it { expect { JSON.generate(payload) }.not_to raise_error }
+      it { expect(field_value("User Agent")).to eq("Mozilla \uFFFD") }
+    end
+
+    context "with a message in another valid encoding" do
+      let(:exception) { captured_exception(RuntimeError, "Caf\xE9 closed".dup.force_encoding(Encoding::Windows_1252)) }
+
+      it { expect(embed[:description]).to include("Café closed") }
+    end
+
+    context "with an invalid byte in the exception message" do
+      let(:exception) { captured_exception(RuntimeError, "bad \xFF") }
+
+      it { expect(embed[:description]).to include("bad \uFFFD") }
+    end
+  end
+
   describe "backtrace handling" do
     context "when the exception has no backtrace" do
       let(:exception) { RuntimeError.new("boom") }
@@ -232,6 +255,52 @@ RSpec.describe RailsDiscordNotifier::Payload do
       it { expect { payload }.not_to raise_error }
     end
 
+    context "when config.context returns a secret" do
+      before { config.context = ->(_env) { { "api_token" => "tok_123" } } }
+
+      it { expect(field_value("api_token")).to eq("[FILTERED]") }
+    end
+
+    context "when passed context carries a secret" do
+      subject(:payload) { described_class.new(exception, env: env, config: config, context: { password: "hunter2" }).to_h }
+
+      it { expect(field_value("password")).to eq("[FILTERED]") }
+      it { expect(payload.to_s).not_to include("hunter2") }
+    end
+
+    # The Rails guides' own example filter assumes string values.
+    context "when a filter Proc raises on a context value" do
+      before do
+        config.filter_parameters = [->(key, value) { value.reverse! if key.to_s.include?("card") }]
+        config.context = ->(_env) { { "card_count" => 3 } }
+      end
+
+      it { expect(field_value("Backtrace")).not_to be_nil }
+      it { expect(field_value("card_count")).to be_nil }
+    end
+
+    # Rails.error.report(e, context: { params: params }) hands over a
+    # Parameters object, which ParameterFilter does not walk into on its own.
+    context "when context carries ActionController::Parameters" do
+      subject(:payload) do
+        described_class.new(exception, env: env, config: config,
+                                       context: { params: ActionController::Parameters.new("password" => "hunter2") }).to_h
+      end
+
+      it { expect(payload.to_s).not_to include("hunter2") }
+    end
+
+    context "when the filter cannot process the context" do
+      before do
+        allow(config.logger).to receive(:warn)
+        config.filter_parameters = [->(key, value) { value.reverse! if key.to_s.include?("card") }]
+        config.context = ->(_env) { { "card_count" => 3 } }
+        payload
+      end
+
+      it { expect(config.logger).to have_received(:warn).with(/context/) }
+    end
+
     context "when context is passed directly" do
       subject(:payload) { described_class.new(exception, env: env, config: config, context: { "Job" => "ImportJob" }).to_h }
 
@@ -258,17 +327,18 @@ RSpec.describe RailsDiscordNotifier::Payload do
   end
 
   describe "#fingerprint" do
-    subject(:fingerprint) { described_class.new(exception, env: env, config: config).fingerprint }
+    subject(:fingerprint) { fingerprint_for(exception, "/articles/1") }
+
+    def fingerprint_for(error, path, action: "show")
+      env = Rack::MockRequest.env_for("https://app.example.com#{path}")
+                             .merge("action_dispatch.request.parameters" => { "controller" => "articles", "action" => action })
+      described_class.new(error, env: env, config: config).fingerprint
+    end
 
     it { is_expected.to be_a(String) }
-
-    it "matches for two occurrences of the same error in the same place" do
-      expect(fingerprint).to eq(described_class.new(exception, env: env, config: config).fingerprint)
-    end
-
-    it "differs for a different exception class" do
-      other = described_class.new(captured_exception(ArgumentError, "boom"), env: env, config: config)
-      expect(fingerprint).not_to eq(other.fingerprint)
-    end
+    it { is_expected.to eq(fingerprint_for(exception, "/articles/1")) }
+    it { is_expected.to eq(fingerprint_for(exception, "/articles/2")) }
+    it { is_expected.not_to eq(fingerprint_for(exception, "/articles/1", action: "edit")) }
+    it { is_expected.not_to eq(fingerprint_for(captured_exception(ArgumentError, "boom"), "/articles/1")) }
   end
 end

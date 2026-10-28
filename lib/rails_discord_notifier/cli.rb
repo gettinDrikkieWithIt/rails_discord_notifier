@@ -2,19 +2,20 @@
 
 module RailsDiscordNotifier
   # `rails_discord_notifier test` posts a real message to your webhook and prints
-  # what Discord said. It answers the first question every user of this gem has:
+  # what the service said. It answers the first question every user of this gem has:
   # "is my webhook actually wired up?"
   class CLI
     USAGE = <<~TEXT
       Usage: rails_discord_notifier <command> [options]
 
       Commands:
-        test       Send a sample exception report to your Discord webhook
+        test       Send a sample exception report to your Discord or Google Chat webhook
         version    Print the gem version
         help       Show this message
 
       Options:
-        --webhook URL   Webhook to use (defaults to $DISCORD_WEBHOOK_URL)
+        --webhook URL   Webhook to use (defaults to $DISCORD_WEBHOOK_URL,
+                        then $GOOGLE_CHAT_WEBHOOK_URL)
     TEXT
 
     def initialize(argv, out: $stdout, env: ENV)
@@ -42,16 +43,16 @@ module RailsDiscordNotifier
         return 1
       end
 
-      @out.puts("Posting a sample exception report to Discord…")
+      @out.puts("Posting a sample exception report to your webhook…")
       deliver(config)
     end
 
     def deliver(config)
       if Client.new(config).post(sample_payload(config))
-        @out.puts("Sent. Check your Discord channel.")
+        @out.puts("Sent. Check your channel.")
         0
       else
-        @out.puts("Discord did not accept the message. See the logged response above.")
+        @out.puts("The webhook did not accept the message. See the logged response above.")
         1
       end
     end
@@ -62,7 +63,7 @@ module RailsDiscordNotifier
       rescue StandardError => e
         e
       end
-      Payload.new(exception, config: config).to_h
+      Payload.build(exception, config: config).to_h
     end
 
     def test_config
@@ -78,14 +79,17 @@ module RailsDiscordNotifier
       index = @argv.index("--webhook")
       return @argv[index + 1] if index && @argv[index + 1]
 
-      @env["DISCORD_WEBHOOK_URL"]
+      # Blank counts as unset: deploy templates often export unused variables as "".
+      @env.values_at("DISCORD_WEBHOOK_URL", "GOOGLE_CHAT_WEBHOOK_URL").find { |url| !url.to_s.strip.empty? }
     end
 
+    # Never echoes the URL: it is a credential and this may be a CI log.
     def webhook_help
       if webhook_url.to_s.strip.empty?
-        "No webhook configured. Set DISCORD_WEBHOOK_URL or pass --webhook URL."
+        "No webhook configured. Set DISCORD_WEBHOOK_URL or GOOGLE_CHAT_WEBHOOK_URL, or pass --webhook URL."
       else
-        "Invalid webhook: expected an https://discord.com/api/webhooks/... URL, got #{webhook_url}"
+        "Invalid webhook: expected an https://discord.com/api/webhooks/... " \
+          "or https://chat.googleapis.com/v1/spaces/... URL"
       end
     end
 

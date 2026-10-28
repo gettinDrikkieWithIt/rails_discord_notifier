@@ -28,7 +28,8 @@ module RailsDiscordNotifier
     def extra_fields(handled, severity, source, context)
       fields = { "Severity" => severity.to_s, "Handled" => handled.to_s }
       fields["Source"] = source.to_s if source
-      context.except(:env, "env").each { |key, value| fields[key.to_s] = value.to_s }
+      # Left as-is: the payload filters nested values, then stringifies them.
+      context.except(:env, "env").each { |key, value| fields[key.to_s] = value }
       fields
     end
 

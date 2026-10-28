@@ -48,6 +48,31 @@ RSpec.describe RailsDiscordNotifier::CLI do
     it { expect(a_request(:post, url).with { |r| r.body.include?("RailsDiscordNotifier") }).to have_been_made }
   end
 
+  describe "test command with a Google Chat webhook" do
+    let(:url)     { "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t" }
+    let(:cli_env) { { "GOOGLE_CHAT_WEBHOOK_URL" => url } }
+
+    before do
+      stub_request(:post, url).to_return(status: 200, body: "{}")
+      cli.run
+    end
+
+    it { expect(a_request(:post, url).with { |r| JSON.parse(r.body).keys == ["text"] }).to have_been_made }
+    it { expect(out.string).to match(/sent/i) }
+  end
+
+  describe "test command with an empty DISCORD_WEBHOOK_URL and a Google Chat webhook" do
+    let(:url)     { "https://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=t" }
+    let(:cli_env) { { "DISCORD_WEBHOOK_URL" => "", "GOOGLE_CHAT_WEBHOOK_URL" => url } }
+
+    before do
+      stub_request(:post, url).to_return(status: 200, body: "{}")
+      cli.run
+    end
+
+    it { expect(a_request(:post, url)).to have_been_made }
+  end
+
   describe "webhook given on the command line" do
     let(:argv)    { ["test", "--webhook", "https://discord.com/api/webhooks/2/other"] }
     let(:cli_env) { {} }
@@ -67,6 +92,7 @@ RSpec.describe RailsDiscordNotifier::CLI do
 
     it { expect(cli.run).to eq(1) }
     it { expect(out.string).to include("DISCORD_WEBHOOK_URL") }
+    it { expect(out.string).to include("GOOGLE_CHAT_WEBHOOK_URL") }
   end
 
   describe "with an invalid webhook url" do
@@ -76,6 +102,18 @@ RSpec.describe RailsDiscordNotifier::CLI do
 
     it { expect(cli.run).to eq(1) }
     it { expect(out.string).to include("discord.com") }
+    it { expect(out.string).to include("chat.googleapis.com") }
+  end
+
+  # A webhook URL is a credential, so a rejected one is never echoed back into
+  # terminal scrollback or CI logs.
+  describe "with an invalid webhook url that carries a token" do
+    let(:argv)    { ["test", "--webhook", "http://chat.googleapis.com/v1/spaces/AAA/messages?key=k&token=SECRET"] }
+    let(:cli_env) { {} }
+
+    before { cli.run }
+
+    it { expect(out.string).not_to include("SECRET") }
   end
 
   describe "version command" do

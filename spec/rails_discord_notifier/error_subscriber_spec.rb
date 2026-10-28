@@ -38,6 +38,22 @@ RSpec.describe RailsDiscordNotifier::ErrorSubscriber do
     it { expect(notifier).to have_received(:notify).with(anything, hash_including(context: hash_including("tenant" => "acme"))) }
   end
 
+  # Filtering happens in the payload, so nested context must reach it intact
+  # rather than pre-flattened into a string the filter cannot see inside.
+  describe "when nested context carries a secret" do
+    subject(:subscriber) { described_class.new(notifier: RailsDiscordNotifier::Notifier.new(config, client: client)) }
+
+    let(:config) { RailsDiscordNotifier.config }
+    let(:client) { instance_spy(RailsDiscordNotifier::Client, post: true) }
+
+    before do
+      subscriber.report(exception, handled: false, severity: :error,
+                                   context: { job: { "args" => [{ "password" => "hunter2" }] } })
+    end
+
+    it { expect(client).to have_received(:post).with(satisfy { |body| !body.to_s.include?("hunter2") }) }
+  end
+
   describe "when notification fails" do
     before { allow(notifier).to receive(:notify).and_raise("exploded") }
 

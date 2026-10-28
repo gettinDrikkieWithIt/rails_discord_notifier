@@ -5,7 +5,7 @@ require "net/http"
 require "uri"
 
 module RailsDiscordNotifier
-  # Posts a prepared payload to the Discord webhook.
+  # Posts a prepared payload to the configured webhook.
   #
   # Never raises: a notifier that breaks the request it is reporting on is worse
   # than no notifier. Every failure is logged and swallowed.
@@ -16,7 +16,7 @@ module RailsDiscordNotifier
       @config = config
     end
 
-    # Returns true when Discord accepted the message.
+    # Returns true when the service accepted the message.
     def post(payload)
       uri = target_uri
       return false if uri.nil?
@@ -54,17 +54,17 @@ module RailsDiscordNotifier
       end
     end
 
-    # Logs whatever Discord said, and answers whether the message got through.
+    # Logs whatever the service said, and answers whether the message got through.
     def accepted?(response)
       return true if SUCCESS.cover?(response.code.to_i)
 
       if response.code.to_i == 429
         config.logger.warn(
-          "[RailsDiscordNotifier] rate limited by Discord, retry after #{response["Retry-After"] || "unknown"}s"
+          "[RailsDiscordNotifier] rate limited by the webhook, retry after #{response["Retry-After"] || "unknown"}s"
         )
       else
         config.logger.error(
-          "[RailsDiscordNotifier] Discord rejected the message: HTTP #{response.code} #{response.body}"
+          "[RailsDiscordNotifier] webhook rejected the message: HTTP #{response.code} #{response.body}"
         )
       end
       false

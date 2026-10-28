@@ -50,10 +50,11 @@ RSpec/NestedGroups:
 RSpec/MultipleMemoizedHelpers:
   Max: 8
 
-# Payload is a single cohesive job - read an exception, emit one Discord embed
-# within Discord's limits. Splitting it would add indirection, not clarity.
+# Payload is a single cohesive job - read an exception, emit one redacted embed
+# within Discord's limits, which GoogleChatPayload then renders as text.
+# Splitting it would add indirection, not clarity.
 Metrics/ClassLength:
-  Max: 200
+  Max: 210
 
 RSpec/SpecFilePathFormat:
   Exclude:

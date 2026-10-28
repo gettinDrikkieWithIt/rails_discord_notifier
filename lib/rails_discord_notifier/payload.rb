@@ -34,6 +34,11 @@ module RailsDiscordNotifier
     DROP_ORDER = ["Params", "User Agent", "Host", "Request ID", "Release",
                   "Environment", "Action", "Controller", "URL"].freeze
 
+    # The payload for whichever service the configured webhook belongs to.
+    def self.build(exception, config:, **options)
+      (config.google_chat? ? GoogleChatPayload : Payload).new(exception, config: config, **options)
+    end
+
     def initialize(exception, config:, env: nil, context: {})
       @exception = exception
       @config    = config
@@ -46,15 +51,15 @@ module RailsDiscordNotifier
     end
 
     def size
-      embed = to_h[:embeds].first
-      embed[:title].to_s.length + embed[:description].to_s.length +
-        embed[:fields].sum { |f| f[:name].to_s.length + f[:value].to_s.length }
+      embed_size(embed)
     end
 
-    # Stable identity for an error occurrence, used to throttle repeats.
+    # Stable identity for an error occurrence, used to throttle repeats. Keyed on
+    # the route, not the path, so /users/1, /users/2 and /users/1.json are one
+    # error rather than a way around the throttle.
     def fingerprint
       @fingerprint ||= Digest::SHA256.hexdigest(
-        [exception.class.name, Array(exception.backtrace).first, location].join("|")
+        [exception.class.name, Array(exception.backtrace).first, *rails_params.values_at("controller", "action")].join("|")
       )
     end
 
@@ -63,7 +68,7 @@ module RailsDiscordNotifier
     attr_reader :exception, :config, :env, :context
 
     def embed
-      enforce_total_budget(
+      @embed ||= enforce_total_budget(
         {
           title: truncate(title, TITLE_LIMIT),
           description: truncate(description, DESCRIPTION_LIMIT),
@@ -74,22 +79,18 @@ module RailsDiscordNotifier
       )
     end
 
-    # Coarse "where did this happen" key: request path, or nothing outside a request.
-    def location
-      request ? "#{env["REQUEST_METHOD"]} #{request.path}" : nil
-    end
-
     def title
-      return exception.class.name unless request
-
-      "Exception in #{env["REQUEST_METHOD"]} #{request.path}"
+      request ? "Exception in #{env["REQUEST_METHOD"]} #{request.path}" : exception.class.name
     end
 
     def description
-      text = "**#{exception.class}**: #{scrubber.scrub(exception.message)}"
-      cause = exception.cause
-      text << "\nCaused by **#{cause.class}**: #{scrubber.scrub(cause.message)}" if cause
-      text
+      [exception, exception.cause].compact
+                                  .map { |error| "#{bold(error.class)}: #{scrubber.scrub(error.message)}" }
+                                  .join("\nCaused by ")
+    end
+
+    def bold(text)
+      "**#{text}**"
     end
 
     def scrubber
@@ -122,9 +123,16 @@ module RailsDiscordNotifier
       ]
     end
 
+    # ParameterFilter only walks into real Hashes, so ActionController::Parameters
+    # is unwrapped first. Context the filter cannot process is left out: sending
+    # it unfiltered could leak, and failing here would drop the whole report.
     def context_fields
       extra = context.merge(configured_context)
-      extra.map { |name, value| { name: name.to_s, value: value.to_s, inline: true } }
+                     .transform_values { |value| value.respond_to?(:to_unsafe_h) ? value.to_unsafe_h : value }
+      parameter_filter.filter(extra).map { |name, value| { name: name.to_s, value: value.to_s, inline: true } }
+    rescue StandardError => e
+      config.logger.warn("[RailsDiscordNotifier] context left out, the filter raised #{e.class}: #{e.message}")
+      []
     end
 
     def configured_context
@@ -263,7 +271,7 @@ module RailsDiscordNotifier
     end
 
     def truncate(string, limit)
-      string = string.to_s
+      string = SecretScrubber.utf8(string)
       return string if string.length <= limit
       return string[0, limit].to_s if limit < ELLIPSIS.length
 

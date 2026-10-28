@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
 RailsDiscordNotifier.configure do |config|
-  # Required. Must be an https://discord.com/api/webhooks/... URL.
-  # If it is missing or malformed the notifier stays disabled and logs a warning
-  # rather than breaking boot.
-  config.webhook_url = ENV.fetch("DISCORD_WEBHOOK_URL", nil)
+  # Required. A Discord (https://discord.com/api/webhooks/...) or Google Chat
+  # (https://chat.googleapis.com/v1/spaces/...) webhook URL. The message format
+  # follows the URL. If it is missing or malformed the notifier stays disabled and
+  # logs a warning rather than breaking boot. Keep it out of source control.
+  config.webhook_url = ENV.fetch("DISCORD_WEBHOOK_URL", nil).presence || ENV.fetch("GOOGLE_CHAT_WEBHOOK_URL", nil)
 
-  # Appearance of the bot in Discord.
+  # Appearance of the bot in Discord. Google Chat uses the name and avatar set on
+  # the webhook itself.
   config.username = ENV.fetch("ERROR_BOT_NAME", "Error Bot")
   # config.avatar_url = ENV.fetch("ERROR_BOT_AVATAR_URL", nil)
 
@@ -20,7 +22,7 @@ RailsDiscordNotifier.configure do |config|
   # Collapse repeats of the same error for this many seconds. 0 disables it.
   # config.throttle_period = 60
 
-  # Network timeouts, in seconds. Kept short so a slow Discord never slows you down.
+  # Network timeouts, in seconds. Kept short so a slow webhook never slows you down.
   # config.open_timeout  = 2
   # config.read_timeout  = 5
   # config.write_timeout = 5

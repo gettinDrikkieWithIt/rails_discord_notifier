@@ -4,6 +4,7 @@ require "rails_discord_notifier/version"
 require "rails_discord_notifier/configuration"
 require "rails_discord_notifier/secret_scrubber"
 require "rails_discord_notifier/payload"
+require "rails_discord_notifier/google_chat_payload"
 require "rails_discord_notifier/client"
 require "rails_discord_notifier/notifier"
 require "rails_discord_notifier/middleware"
@@ -66,7 +67,8 @@ module RailsDiscordNotifier
       return if !config.enabled || config.valid_webhook_url?
 
       config.logger.warn(
-        "[RailsDiscordNotifier] disabled: webhook_url must be an https://discord.com/api/webhooks/... URL"
+        "[RailsDiscordNotifier] disabled: webhook_url must be an https://discord.com/api/webhooks/... " \
+        "or https://chat.googleapis.com/v1/spaces/... URL"
       )
     end
   end
