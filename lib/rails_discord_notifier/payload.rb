@@ -112,7 +112,7 @@ module RailsDiscordNotifier
 
     def request_fields
       [
-        { name: "URL", value: filtered_url },
+        { name: "URL", value: request_url },
         { name: "Controller", value: rails_params["controller"], inline: true },
         { name: "Action", value: rails_params["action"], inline: true },
         { name: "Environment", value: config.environment, inline: true },
@@ -196,21 +196,10 @@ module RailsDiscordNotifier
       Array(exception.backtrace).first(config.backtrace_lines)
     end
 
-    def filtered_url
-      return nil unless request
-
-      base  = "#{request.base_url}#{request.path}"
-      query = filtered_query_string
-      query.empty? ? base : "#{base}?#{query}"
-    end
-
-    def filtered_query_string
-      raw = request.query_string.to_s
-      return "" if raw.empty?
-
-      Rack::Utils.build_nested_query(parameter_filter.filter(Rack::Utils.parse_nested_query(raw)))
-    rescue StandardError
-      ""
+    # Without the query string: its values reach the report only through the
+    # filtered Params field, so include_params = false sends none of them.
+    def request_url
+      request && "#{request.base_url}#{request.path}"
     end
 
     def request_params

@@ -47,9 +47,8 @@ RSpec.describe RailsDiscordNotifier::Payload do
     it { expect(field_value("Params")).not_to include("hunter2") }
     it { expect(field_value("Params")).not_to include("abc123") }
     it { expect(field_value("Params")).to include("keep") }
-    it { expect(field_value("URL")).not_to include("SUPERSECRET") }
-    it { expect(field_value("URL")).to include("q=hi") }
-    it { expect(field_value("URL")).to include("https://app.example.com/users") }
+    it { expect(field_value("URL")).to eq("https://app.example.com/users") }
+    it { expect(field_value("Params")).to include('"q": "hi"') }
     it { expect(payload.to_s).not_to include("SUPERSECRET") }
     it { expect(payload.to_s).not_to include("hunter2") }
 
@@ -304,9 +303,12 @@ RSpec.describe RailsDiscordNotifier::Payload do
   end
 
   describe "include_params" do
+    let(:env) { Rack::MockRequest.env_for("https://app.example.com/search?email=jane%40example.com") }
+
     before { config.include_params = false }
 
     it { expect(field_value("Params")).to be_nil }
+    it { expect(payload.to_s).not_to include("jane") }
   end
 
   describe "custom context" do

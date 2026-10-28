@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The URL field no longer includes the query string.** Query values were
+  sent twice, filtered, in the URL and in Params, and the URL copy was still
+  sent with `config.include_params = false`. They now appear only in Params, so
+  `include_params = false` sends none of them.
+
 ## [0.3.1] - 2026-10-28
 
 ### Changed
