@@ -140,11 +140,11 @@ Parameters and query strings are filtered recursively with
    `session`, `credential`).
 
 Because it is a union, enabling this gem can never redact less than your
-application already does. The URL field leaves out the query string, so query
-values appear only in the filtered params. To send no parameters at all,
-including the query string, set `config.include_params = false`. The same
-filter applies to extra fields from `config.context` and from `Rails.error`
-context.
+application already does. The URL field leaves out the query string, so the
+query string is sent only as part of the filtered params. To leave out params
+and the query string, set `config.include_params = false`. An exception message
+that quotes a parameter value is still sent (see below). The same filter
+applies to extra fields from `config.context` and from `Rails.error` context.
 
 Exception messages are free text rather than structured parameters, so they get
 a best-effort scrub instead: `token=abc`, `password="x"`, `Api_Key: abc`,

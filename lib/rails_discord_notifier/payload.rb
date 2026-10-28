@@ -196,8 +196,8 @@ module RailsDiscordNotifier
       Array(exception.backtrace).first(config.backtrace_lines)
     end
 
-    # Without the query string: its values reach the report only through the
-    # filtered Params field, so include_params = false sends none of them.
+    # Without the query string, which is sent only as part of the filtered
+    # Params field, so include_params = false leaves it out.
     def request_url
       request && "#{request.base_url}#{request.path}"
     end
